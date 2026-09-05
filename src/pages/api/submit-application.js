@@ -1,6 +1,6 @@
 export const prerender = false;
 
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEdRYrlR94yiskHLBPVouthkh5eeqIG8MVZBbBmMwbqIifD1er4DIw8XBgiW16PAV6NA/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4c9mPkLDzs-rJMFupsBJpBd96nANxSmAt771js7WqeS87Nju5iYUr_oL7vGyEr6KM/exec';
 const GOOGLE_SCRIPT_URL = import.meta.env.GOOGLE_SCRIPT_URL || DEFAULT_SCRIPT_URL;
 
 export async function POST({ request }) {
