@@ -1,17 +1,19 @@
 /**
  * EVERKIND CONSUMERS - GOOGLE APPS SCRIPT BACKEND
  * 
- * Instructions for setup:
- * 1. Open your Google Sheet where you want to collect leads.
- * 2. Click Extensions > Apps Script.
- * 3. Replace all code in Code.gs with this entire file.
- * 4. Click Deploy > New deployment.
- * 5. Select type: "Web app".
- * 6. Set Description: "Everkind Form API".
- * 7. Set Execute as: "Me".
- * 8. Set Who has access: "Anyone".
- * 9. Click Deploy, authorize permissions, and copy the Web App URL!
+ * Target Folder ID: 10ja_qFzx7sToS7PFZHwNOOVzpOoefCEy
+ * Target Spreadsheet ID: 1lSpTKrhcH3JUxupzpbh1JjyEEFZ_EdCNo3fNybCWcHE
+ * 
+ * CRITICAL STEP TO FIX ACCESS DENIED:
+ * 1. Replace all code in Apps Script Editor Code.gs with this entire file.
+ * 2. In Apps Script, select function "authorizeAndTest" from the top dropdown menu.
+ * 3. Click the "Run" ▶️ button.
+ * 4. Click "Review permissions" -> Choose your Google Account -> Click "Advanced" -> Click "Go to Untitled project (unsafe)" -> Click "Allow".
+ * 5. Click Deploy > Manage Deployments > Edit (pencil icon) > Version: "New version" > Click Deploy!
  */
+
+var FOLDER_ID = "10ja_qFzx7sToS7PFZHwNOOVzpOoefCEy";
+var SPREADSHEET_ID = "1lSpTKrhcH3JUxupzpbh1JjyEEFZ_EdCNo3fNybCWcHE";
 
 function doPost(e) {
   try {
@@ -26,10 +28,9 @@ function doPost(e) {
     var filename = data.filename || "Resume.pdf";
     var base64Data = data.base64 || "";
 
-    // 1. Save Resume PDF to Google Drive
+    // 1. Save Resume PDF to Specific Google Drive Folder
     var fileUrl = "";
     if (base64Data) {
-      // Strip data URL prefix if present
       if (base64Data.indexOf(",") !== -1) {
         base64Data = base64Data.split(",")[1];
       }
@@ -40,13 +41,27 @@ function doPost(e) {
         filename
       );
 
-      var file = DriveApp.createFile(decodedBlob);
+      var folder;
+      try {
+        folder = DriveApp.getFolderById(FOLDER_ID);
+      } catch (fErr) {
+        folder = DriveApp.getRootFolder();
+      }
+
+      var file = folder.createFile(decodedBlob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       fileUrl = file.getUrl();
     }
 
-    // 2. Append Row to Active Google Sheet
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    // 2. Append Row to Specific Google Sheet
+    var spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    } catch (sErr) {
+      spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    }
+    
+    var sheet = spreadsheet.getActiveSheet();
     
     // Ensure header row exists if sheet is empty
     if (sheet.getLastRow() === 0) {
@@ -98,4 +113,19 @@ function doPost(e) {
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({ status: "ok", message: "Everkind Applications API is active." }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Run this function ONCE inside Google Apps Script editor to authorize DriveApp and SpreadsheetApp!
+ */
+function authorizeAndTest() {
+  Logger.log("Testing Drive Access...");
+  var folder = DriveApp.getFolderById(FOLDER_ID);
+  Logger.log("Folder Name: " + folder.getName());
+
+  Logger.log("Testing Spreadsheet Access...");
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  Logger.log("Spreadsheet Name: " + sheet.getName());
+
+  Logger.log("Authorization Successful!");
 }
