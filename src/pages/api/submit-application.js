@@ -1,62 +1,46 @@
 export const prerender = false;
-import { Client } from '@notionhq/client';
 
-const notion = new Client({ auth: import.meta.env.NOTION_SECRET });
-
-const DATABASE_ID = import.meta.env.NOTION_DATABASE_ID; 
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxEdRYrlR94yiskHLBPVouthkh5eeqIG8MVZBbBmMwbqIifD1er4DIw8XBgiW16PAV6NA/exec';
+const GOOGLE_SCRIPT_URL = import.meta.env.GOOGLE_SCRIPT_URL || DEFAULT_SCRIPT_URL;
 
 export async function POST({ request }) {
-  const data = await request.json();
-  const resumeUrl = typeof data.resume === 'string' ? data.resume.trim() : '';
-
   try {
-    if (!resumeUrl) {
-      return new Response(JSON.stringify({ error: 'Missing resume URL' }), { status: 400 });
-    }
+    const data = await request.json();
 
-    await notion.pages.create({
-      parent: { 
-        database_id: DATABASE_ID
-      },
-      properties: {
-        "Name": { 
-          title: [{ text: { content: data.name } }] 
-        },
-        "Email": { 
-          email: data.email 
-        },
-        "Role": { 
-          select: { name: data.role } 
-        },
-        "Total Work Experience": { 
-          select: { name: data.experience } 
-        },
-        // Make sure the capitalization matches your Notion column exactly!
-        "LinkedIn": { 
-          url: data.linkedin 
-        },
-        "Upload CV": { 
-          files: [
-            {
-              name: data.resumeFilename || "Resume",
-              type: "external",
-              external: { url: resumeUrl }
-            }
-          ]
-        }
-      },
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(data),
+      redirect: 'follow',
     });
 
-    return new Response(JSON.stringify({ message: "Success" }), { status: 200 });
-    
+    const responseText = await response.text();
+    console.log("Google Apps Script Backend Response:", responseText);
+
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(responseText);
+    } catch {
+      if (responseText.trim().startsWith('http://') || responseText.trim().startsWith('https://')) {
+        parsedResult = { status: 'success', fileUrl: responseText.trim() };
+      } else {
+        const match = responseText.match(/\{[\s\S]*\}/);
+        if (match) {
+          parsedResult = JSON.parse(match[0]);
+        } else {
+          throw new Error(`Invalid response from submission service: ${responseText.substring(0, 100)}`);
+        }
+      }
+    }
+
+    if (parsedResult.status === 'error' || parsedResult.result === 'error') {
+      return new Response(JSON.stringify({ error: parsedResult.message || 'Submission service returned an error' }), { status: 500 });
+    }
+
+    return new Response(JSON.stringify({ message: 'Success', result: parsedResult }), { status: 200 });
+
   } catch (error) {
-    // 🚨 THE BACKEND X-RAY
-    // This will print the EXACT reason Notion rejected the data to your terminal
-    console.error("----------------------------------");
-    console.error("🚨 NOTION SUBMIT REJECTED:");
-    console.error(error.body || error.message);
-    console.error("----------------------------------");
-    
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    console.error("Submission backend error:", error);
+    return new Response(JSON.stringify({ error: error.message || 'Submission failed' }), { status: 500 });
   }
 }

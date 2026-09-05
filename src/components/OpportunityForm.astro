@@ -1,27 +1,26 @@
 ---
-import { Client } from '@notionhq/client';
+const urlRole = Astro.url.searchParams.get('role') || '';
+let initialRole = urlRole ? decodeURIComponent(urlRole).trim() : '';
 
-const notion = new Client({ auth: import.meta.env.NOTION_SECRET });
-const dataSourceId = import.meta.env.NOTION_DATA_SOURCE_ID;
+let roleOptions = [
+  { name: 'Brand Strategy & Marketing' },
+  { name: 'Design & Creative' },
+  { name: 'Engineering & Tech' },
+  { name: 'Product Management' },
+  { name: 'Operations & Supply Chain' },
+  { name: 'Sales & Business Development' },
+  { name: 'General / Other' }
+];
 
-let roleOptions = [];
-let expOptions = [];
+let expOptions = [
+  { name: '0-2 Years' },
+  { name: '3-5 Years' },
+  { name: '5-8 Years' },
+  { name: '8+ Years' }
+];
 
-function extractOptions(dataSource: any, columnName: string) {
-  const column = dataSource.properties[columnName];
-  if (!column) return [];
-  if (column.type === 'select') return column.select.options || [];
-  if (column.type === 'multi_select') return column.multi_select.options || [];
-  return [];
-}
-
-try {
-  const dataSource = await notion.dataSources.retrieve({ data_source_id: dataSourceId });
-  roleOptions = extractOptions(dataSource, 'Role');
-  expOptions = extractOptions(dataSource, 'Total Work Experience');
-} catch (error) {
-  roleOptions = [{ name: 'Design' }, { name: 'Engineering' }];
-  expOptions = [{ name: '0-2 Years' }, { name: '3-5 Years' }];
+if (initialRole && !roleOptions.some(opt => opt.name.toLowerCase() === initialRole.toLowerCase())) {
+  roleOptions = [{ name: initialRole }, ...roleOptions];
 }
 ---
 
@@ -59,11 +58,11 @@ try {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Role Select */}
-        <div class="flex flex-col gap-2.5 relative custom-select-container">
+        <div class="flex flex-col gap-2.5 relative custom-select-container" id="role-select-container">
           <label class="text-[11px] font-bold uppercase text-(--color-everkind-midgrey) ml-1" style="font-family: var(--font-sans);">Desired Role</label>
-          <input type="hidden" name="role" required />
+          <input type="hidden" name="role" value={initialRole} required />
           <button type="button" class="select-trigger w-full bg-white border border-(--color-everkind-dark)/10 px-5 py-4 rounded-xl flex items-center justify-between text-left transition-all hover:border-(--color-everkind-dark)/20">
-            <span class="text-(--color-everkind-midgrey)/50" style="font-family: var(--font-sans);">Select a role...</span>
+            <span class={initialRole ? "text-(--color-everkind-dark)" : "text-(--color-everkind-midgrey)/50"} style="font-family: var(--font-sans);">{initialRole || "Select a role..."}</span>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" class="text-(--color-everkind-green) transition-transform duration-300" fill="currentColor" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80a8,8,0,0,1,11.32-11.32L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"></path></svg>
           </button>
           
@@ -109,7 +108,7 @@ try {
       <div class="flex flex-col gap-3">
         <label class="text-[11px] font-bold uppercase text-(--color-everkind-midgrey) ml-1" style="font-family: var(--font-sans);">CV / Resume Submission</label>
         <div class="relative w-full">
-            <input type="file" id="resume-upload" accept=".pdf" required class="hidden" />
+            <input type="file" id="resume-upload" name="resume" accept=".pdf" class="hidden" />
             <label for="resume-upload" id="fileLabel" class="flex flex-col items-center justify-center w-full bg-white border-2 border-dashed border-(--color-everkind-dark)/10 hover:border-(--color-everkind-green)/40 p-12 rounded-2xl cursor-pointer transition-all group">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-(--color-everkind-green) mb-4 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -152,40 +151,57 @@ try {
 </style>
 
 <script>
-  // 1. DROPDOWN LOGIC
-  document.querySelectorAll('.custom-select-container').forEach(container => {
-    const trigger = container.querySelector('.select-trigger');
-    const optionsMenu = container.querySelector('.select-options');
-    const hiddenInput = container.querySelector('input[type="hidden"]') as HTMLInputElement;
-    const triggerText = trigger?.querySelector('span');
-    const arrow = trigger?.querySelector('svg');
-
-    trigger?.addEventListener('click', () => {
-      const isOpen = !optionsMenu?.classList.contains('opacity-0');
-      
-      // Close others
-      document.querySelectorAll('.select-options').forEach(el => el.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2'));
-      document.querySelectorAll('.select-trigger svg').forEach(el => el.classList.remove('rotate-180'));
-
-      if (!isOpen) {
-        optionsMenu?.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
-        arrow?.classList.add('rotate-180');
+  // 1. DROPDOWN LOGIC & URL PARAMS SYNC
+  const initDropdowns = () => {
+    const params = new URLSearchParams(window.location.search);
+    const clientRole = params.get('role');
+    if (clientRole) {
+      const decodedRole = decodeURIComponent(clientRole).trim();
+      const roleContainer = document.getElementById('role-select-container');
+      const hiddenInput = roleContainer?.querySelector('input[name="role"]') as HTMLInputElement;
+      const triggerText = roleContainer?.querySelector('.select-trigger span');
+      if (hiddenInput && triggerText) {
+        hiddenInput.value = decodedRole;
+        triggerText.textContent = decodedRole;
+        triggerText.classList.replace('text-(--color-everkind-midgrey)/50', 'text-(--color-everkind-dark)');
       }
-    });
+    }
 
-    container.querySelectorAll('.option-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const val = item.getAttribute('data-value');
-        if (val && hiddenInput && triggerText) {
-          hiddenInput.value = val;
-          triggerText.textContent = val;
-          triggerText.classList.replace('text-(--color-everkind-midgrey)/50', 'text-(--color-everkind-dark)');
-          optionsMenu?.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
-          arrow?.classList.remove('rotate-180');
+    document.querySelectorAll('.custom-select-container').forEach(container => {
+      const trigger = container.querySelector('.select-trigger');
+      const optionsMenu = container.querySelector('.select-options');
+      const hiddenInput = container.querySelector('input[type="hidden"]') as HTMLInputElement;
+      const triggerText = trigger?.querySelector('span');
+      const arrow = trigger?.querySelector('svg');
+
+      trigger?.addEventListener('click', () => {
+        const isOpen = !optionsMenu?.classList.contains('opacity-0');
+        
+        document.querySelectorAll('.select-options').forEach(el => el.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2'));
+        document.querySelectorAll('.select-trigger svg').forEach(el => el.classList.remove('rotate-180'));
+
+        if (!isOpen) {
+          optionsMenu?.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+          arrow?.classList.add('rotate-180');
         }
       });
+
+      container.querySelectorAll('.option-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const val = item.getAttribute('data-value');
+          if (val && hiddenInput && triggerText) {
+            hiddenInput.value = val;
+            triggerText.textContent = val;
+            triggerText.classList.replace('text-(--color-everkind-midgrey)/50', 'text-(--color-everkind-dark)');
+            optionsMenu?.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+            arrow?.classList.remove('rotate-180');
+          }
+        });
+      });
     });
-  });
+  };
+
+  initDropdowns();
 
   window.addEventListener('click', (e) => {
     if (!(e.target as Element).closest('.custom-select-container')) {
@@ -195,7 +211,6 @@ try {
   });
 
   // 2. FORM SUBMISSION PIPELINE
-  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzEDfO1JBMYX0XmBGKPi3UIziC7KaY5sdYphNz8FuGK80uMIsf7QQ4hUf3kej_F-4pBsg/exec';
   const form = document.getElementById('notion-form') as HTMLFormElement;
   const fileInput = document.getElementById('resume-upload') as HTMLInputElement;
   const fileLabel = document.getElementById('fileLabel');
@@ -211,7 +226,11 @@ try {
   const readFileAsBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
+      reader.onload = () => {
+        const fullDataUrl = reader.result as string;
+        const cleanBase64 = fullDataUrl.includes(',') ? fullDataUrl.split(',')[1] : fullDataUrl;
+        resolve(cleanBase64);
+      };
       reader.onerror = (e) => reject(e);
       reader.readAsDataURL(file);
     });
@@ -231,61 +250,68 @@ try {
       return;
     }
 
-    btn.innerHTML = 'Uploading...';
+    const formData = new FormData(form);
+    const name = (formData.get('name') as string || '').trim();
+    const email = (formData.get('email') as string || '').trim();
+    const role = (formData.get('role') as string || '').trim();
+    const experience = (formData.get('experience') as string || '').trim();
+    const linkedin = (formData.get('linkedin') as string || '').trim();
+
+    if (!role) {
+      status.style.opacity = '1';
+      status.textContent = 'PLEASE SELECT A DESIRED ROLE';
+      status.style.color = '#b91c1c';
+      btn.disabled = false;
+      return;
+    }
+
+    if (!experience) {
+      status.style.opacity = '1';
+      status.textContent = 'PLEASE SELECT YOUR WORK EXPERIENCE';
+      status.style.color = '#b91c1c';
+      btn.disabled = false;
+      return;
+    }
+
+    btn.innerHTML = 'Submitting...';
     status.style.opacity = '1';
-    status.textContent = 'SECURELY UPLOADING RESUME';
+    status.textContent = 'SAVING APPLICATION & RESUME';
     status.style.color = 'var(--color-everkind-midgrey)';
 
     try {
       const base64Data = await readFileAsBase64(file);
-      const driveRes = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
-        body: JSON.stringify({ filename: file.name, mimeType: file.type, base64: base64Data })
-      });
 
-      if (!driveRes.ok) {
-        throw new Error(`Resume upload failed (${driveRes.status})`);
-      }
+      const payload = {
+        name,
+        email,
+        role,
+        experience,
+        linkedin,
+        filename: file.name,
+        mimeType: file.type || 'application/pdf',
+        base64: base64Data
+      };
 
-      const driveText = await driveRes.text();
-      let driveResult;
-
-      try {
-        driveResult = JSON.parse(driveText);
-      } catch {
-        throw new Error('Resume upload service returned an invalid response');
-      }
-
-      if (!driveResult?.success || !driveResult?.url) {
-        throw new Error('Resume upload failed');
-      }
-
-      btn.innerHTML = 'Syncing...';
-      status.textContent = 'CONNECTING TO DATABASE';
-
-      const formData = new FormData(form);
-      const data = Object.fromEntries(formData.entries());
-      data.resume = driveResult.url;
-      data.resumeFilename = file.name;
-
-      const notionRes = await fetch('/api/submit-application', {
+      const response = await fetch('/api/submit-application', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
       });
 
-      if (notionRes.ok) {
+      const resData = await response.json().catch(() => ({}));
+
+      if (response.ok) {
         status.textContent = "SUCCESSFULLY SUBMITTED";
         status.style.color = "var(--color-everkind-green)";
         form.reset();
-        if(fileLabel) fileLabel.querySelector('span')!.textContent = "Select PDF from your device";
+        if (fileLabel) fileLabel.querySelector('span')!.textContent = "Select PDF from your device";
       } else {
-        throw new Error('Notion Error');
+        throw new Error(resData.error || resData.message || 'Submission failed');
       }
-      
-    } catch (err) {
-      status.textContent = "SUBMISSION FAILED";
+
+    } catch (err: any) {
+      console.error("Submission error details:", err);
+      status.textContent = err.message ? `SUBMISSION FAILED: ${err.message.toUpperCase()}` : "SUBMISSION FAILED";
       status.style.color = "#b91c1c";
     } finally {
       btn.disabled = false;
